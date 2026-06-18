@@ -1,4 +1,5 @@
-from discord import Embed, User
+from discord import Embed
+from discord import User as DiscordUser
 from discord.ext import commands
 
 from bot.client import Bot
@@ -9,7 +10,7 @@ class User(commands.Cog):
         self.bot = bot
 
     @commands.command(aliases=["ui", "userinfo", "whois"])
-    async def user(self, ctx: commands.Context, user: User = None) -> None:
+    async def user(self, ctx: commands.Context, user: DiscordUser = None) -> None:
         if user is None:
             user = ctx.author
 
@@ -52,17 +53,15 @@ class User(commands.Cog):
             embed.add_field(
                 name="Roles",
                 value=" ".join(
-                    (
-                        role.mention
-                        for role in sorted(member.roles, reverse=True)[:3]
-                        if role != ctx.guild.default_role
-                    )
+                    role.mention
+                    for role in sorted(member.roles, reverse=True)[:3]
+                    if role != ctx.guild.default_role
                 )
-                      + (
-                          f" *(+{len(member.roles) - 3} more)*"
-                          if len(member.roles) > 3
-                          else ""
-                      ),
+                + (
+                    f" *(+{len(member.roles) - 3} more)*"
+                    if len(member.roles) > 3
+                    else ""
+                ),
                 inline=False,
             )
 
@@ -73,10 +72,10 @@ class User(commands.Cog):
                     (
                         f"- [{name} URL]({url})"
                         for name, url in {
-                        "Avatar": user.display_avatar.url,
-                        "Banner": _user.banner.url if _user.banner else None,
-                        "Profile": f"https://discord.com/users/{user.id}",
-                    }.items()
+                            "Avatar": user.display_avatar.url,
+                            "Banner": _user.banner.url if _user.banner else None,
+                            "Profile": f"https://discord.com/users/{user.id}",
+                        }.items()
                         if url
                     )
                 )

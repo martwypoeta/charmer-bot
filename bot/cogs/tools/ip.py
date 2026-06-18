@@ -36,24 +36,24 @@ class Ip(commands.Cog):
 
         if not regex.fullmatch(ip_or_domain):
             try:
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                            f"https://dns.google/resolve?name={ip_or_domain}&type=A"
-                    ) as resp:
-                        if resp.status == 200:
-                            dns_data = await resp.json()
-                            if "Answer" in dns_data:
-                                ip_address = dns_data["Answer"][0]["data"]
-                            else:
-                                await ctx.reply(
-                                    f"Could not resolve the domain: {ip_or_domain}"
-                                )
-                                return
+                async with (
+                    aiohttp.ClientSession() as session,
+                    session.get(
+                        f"https://dns.google/resolve?name={ip_or_domain}&type=A"
+                    ) as resp,
+                ):
+                    if resp.status == 200:
+                        dns_data = await resp.json()
+                        if "Answer" in dns_data:
+                            ip_address = dns_data["Answer"][0]["data"]
                         else:
                             await ctx.reply(
-                                f"DNS resolution failed for: {ip_or_domain}"
+                                f"Could not resolve the domain: {ip_or_domain}"
                             )
                             return
+                    else:
+                        await ctx.reply(f"DNS resolution failed for: {ip_or_domain}")
+                        return
             except aiohttp.ClientError:
                 await ctx.reply(
                     f"An error occurred while resolving the domain: {ip_or_domain}"
@@ -62,16 +62,18 @@ class Ip(commands.Cog):
         else:
             ip_address = ip_or_domain
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(
-                    f"http://ip-api.com/json/{ip_address}",
-                    headers={"Accept": "application/json"},
-            ) as response:
-                if response.status != 200:
-                    await ctx.reply("IP address not found.")
-                    return
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(
+                f"http://ip-api.com/json/{ip_address}",
+                headers={"Accept": "application/json"},
+            ) as response,
+        ):
+            if response.status != 200:
+                await ctx.reply("IP address not found.")
+                return
 
-                data = await response.json()
+            data = await response.json()
 
         embed = (
             Embed(

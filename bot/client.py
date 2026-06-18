@@ -2,13 +2,12 @@ import asyncio
 import datetime
 import os
 import traceback
-from typing import Optional
 
 from aiofiles import os as aio_os
 from aiofiles.os import listdir
-from asyncpg import Pool
-from discord import AllowedMentions, Intents, Activity, ActivityType
+from discord import Activity, ActivityType, AllowedMentions, Intents
 from discord.ext import commands
+from psycopg_pool import AsyncConnectionPool
 
 from bot.lib import create_pool
 
@@ -27,10 +26,10 @@ class Bot(commands.Bot):
                 roles=False,
                 replied_user=False,
             ),
-            activity=Activity(type=ActivityType.listening, name="Spotify")
+            activity=Activity(type=ActivityType.listening, name="Spotify"),
         )
         self.boot: datetime.datetime = datetime.datetime.now(datetime.UTC)
-        self.pool: Optional[Pool] = None
+        self.pool: AsyncConnectionPool | None = None
         self.command_groups: dict[str, list[commands.Command]] = {}
         self.run()
 
@@ -93,7 +92,7 @@ class Bot(commands.Bot):
         self.command_groups[category] = category_commands
 
     async def on_command_error(
-            self, ctx: commands.Context, exception: commands.CommandError
+        self, ctx: commands.Context, exception: commands.CommandError
     ) -> None:
         ignored_errors = (
             commands.CommandNotFound,
