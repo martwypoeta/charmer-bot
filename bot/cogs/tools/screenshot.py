@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 from io import BytesIO
 
-from discord import ButtonStyle, Embed, File, Interaction, User
+from discord import ButtonStyle, Embed, File, Interaction, Member, User
 from discord.ext import commands
 from discord.ui import Button, View, button
 from psycopg.rows import dict_row
@@ -20,15 +20,18 @@ class Screenshot(commands.Cog):
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
         self.api_token = os.getenv("SCREENSHOT_API_TOKEN")
-        ssl._create_default_https_context = ssl._create_unverified_context
 
     @staticmethod
     def _is_administrator(ctx: commands.Context) -> bool:
-        return ctx.guild is not None and ctx.author.guild_permissions.administrator
+        return (
+            ctx.guild is not None
+            and isinstance(ctx.author, Member)
+            and ctx.author.guild_permissions.administrator
+        )
 
     @commands.group(aliases=["ss", "webshot"], invoke_without_command=True)
     async def screenshot(self, ctx: commands.Context, *, url: str) -> None:
-        async with self.bot.pool.connection() as connection:
+        async with self.bot.db.connection() as connection:
             cur = await connection.execute(
                 "SELECT 1 FROM ss_grants WHERE user_id = %s",
                 (ctx.author.id,),
@@ -76,7 +79,9 @@ class Screenshot(commands.Cog):
                 )
 
                 class Delete(View):
-                    def __init__(self, *, author: User, timeout: int = 180) -> None:
+                    def __init__(
+                        self, *, author: User | Member, timeout: int = 180
+                    ) -> None:
                         super().__init__(timeout=timeout)
                         self.author = author
 
@@ -92,7 +97,8 @@ class Screenshot(commands.Cog):
                         if not self.check(interaction):
                             return await interaction.response.defer()
 
-                        await interaction.message.delete()
+                        if interaction.message is not None:
+                            await interaction.message.delete()
 
                 await ctx.reply(file=file, embed=embed, view=Delete(author=ctx.author))
             else:
@@ -109,7 +115,9 @@ class Screenshot(commands.Cog):
                 f"?token={self.api_token}&url={encoded_url}&output=image&file_type=png"
             )
 
-            with urllib.request.urlopen(query) as response:
+            with urllib.request.urlopen(
+                query, context=ssl._create_unverified_context()
+            ) as response:
                 screenshot_data = BytesIO(response.read())
                 screenshot_data.seek(0)
                 return screenshot_data
@@ -123,11 +131,11 @@ class Screenshot(commands.Cog):
             await ctx.reply(self._ADMIN_REQUIRED)
             return
 
-        async with self.bot.pool.connection() as connection:
-            cur = await connection.execute(
-                "SELECT * FROM ss_grants",
-                row_factory=dict_row,
-            )
+        async with (
+            self.bot.db.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cur,
+        ):
+            await cur.execute("SELECT * FROM ss_grants")
             grants = await cur.fetchall()
 
             if not grants:
@@ -165,7 +173,7 @@ class Screenshot(commands.Cog):
             await ctx.reply(self._ADMIN_REQUIRED)
             return
 
-        async with self.bot.pool.connection() as connection:
+        async with self.bot.db.connection() as connection:
             cur = await connection.execute(
                 "SELECT 1 FROM ss_grants WHERE user_id = %s",
                 (user.id,),
@@ -187,7 +195,7 @@ class Screenshot(commands.Cog):
             await ctx.reply(self._ADMIN_REQUIRED)
             return
 
-        async with self.bot.pool.connection() as connection:
+        async with self.bot.db.connection() as connection:
             cur = await connection.execute(
                 "SELECT 1 FROM ss_grants WHERE user_id = %s",
                 (user.id,),

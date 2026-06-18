@@ -1,4 +1,4 @@
-from discord import Embed
+from discord import Embed, Member
 from discord import User as DiscordUser
 from discord.ext import commands
 
@@ -10,9 +10,15 @@ class User(commands.Cog):
         self.bot = bot
 
     @commands.command(aliases=["ui", "userinfo", "whois"])
-    async def user(self, ctx: commands.Context, user: DiscordUser = None) -> None:
+    async def user(
+        self, ctx: commands.Context, user: DiscordUser | Member | None = None
+    ) -> None:
         if user is None:
             user = ctx.author
+
+        if ctx.guild is None:
+            await ctx.reply("This command can only be used in a server.")
+            return
 
         _user = await self.bot.fetch_user(user.id)
 
@@ -39,7 +45,7 @@ class User(commands.Cog):
         except Exception:
             member = None
 
-        if member:
+        if member and member.joined_at:
             embed.add_field(
                 name="Joined at",
                 value=f"<t:{int(member.joined_at.timestamp())}:R>",
