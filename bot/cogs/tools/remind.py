@@ -2,7 +2,9 @@ import asyncio
 import time
 
 from discord import AllowedMentions
+from discord.abc import Messageable
 from discord.ext import commands, tasks
+from psycopg.rows import dict_row
 
 from bot.client import Bot
 
@@ -13,17 +15,17 @@ class Remind(commands.Cog):
         self.check_reminders.start()
 
     @commands.command(name="remind", aliases=["remindme"])
-    async def remind(
-            self, ctx: commands.Context, time_input: str, *, message: str
-    ):
-        async with self.bot.pool.acquire() as connection:
-            reminders = await connection.fetch(
-                "SELECT * FROM reminders WHERE user_id = $1",
-                ctx.author.id,
+    async def remind(self, ctx: commands.Context, time_input: str, *, message: str):
+        async with self.bot.db.connection() as connection:
+            cur = await connection.execute(
+                "SELECT COUNT(*) FROM reminders WHERE user_id = %s",
+                (ctx.author.id,),
             )
-            if len(reminders) >= 2:
+            row = await cur.fetchone()
+            if row is not None and row[0] >= 2:
                 await ctx.send(
-                    "You have already set 2 reminders. Please delete one before setting a new one."
+                    "You have already set 2 reminders. "
+                    "Please delete one before setting a new one."
                 )
                 return
 
@@ -60,17 +62,15 @@ class Remind(commands.Cog):
             await self.send_reminder(user_id, message, channel_id)
             return
 
-        async with self.bot.pool.acquire() as connection:
+        async with self.bot.db.connection() as connection:
             await connection.execute(
                 """
-                INSERT INTO reminders (user_id, message_id, channel_id, message, remind_time)
-                VALUES ($1, $2, $3, $4, $5)
+                INSERT INTO reminders (
+                    user_id, message_id, channel_id, message, remind_time
+                )
+                VALUES (%s, %s, %s, %s, %s)
                 """,
-                user_id,
-                message_id,
-                channel_id,
-                message,
-                remind_time_epoch,
+                (user_id, message_id, channel_id, message, remind_time_epoch),
             )
 
         await ctx.send(f"Reminder set for {time_input}. I will remind you: `{message}`")
@@ -78,20 +78,23 @@ class Remind(commands.Cog):
     @tasks.loop(minutes=5)
     async def check_reminders(self):
         current_time = int(time.time())
-        async with self.bot.pool.acquire() as connection:
-            five_minutes = current_time + 300
-            reminders = await connection.fetch(
-                "SELECT * FROM reminders WHERE remind_time <= $1",
-                five_minutes,
+        async with (
+            self.bot.db.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cur,
+        ):
+            await cur.execute(
+                "SELECT * FROM reminders WHERE remind_time <= %s",
+                (current_time + 300,),
             )
+            reminders = await cur.fetchall()
 
         for reminder in reminders:
             time_to_go = reminder["remind_time"] - current_time
 
-            async with self.bot.pool.acquire() as connection:
+            async with self.bot.db.connection() as connection:
                 await connection.execute(
-                    "DELETE FROM reminders WHERE message_id = $1",
-                    reminder["message_id"],
+                    "DELETE FROM reminders WHERE message_id = %s",
+                    (reminder["message_id"],),
                 )
 
             if time_to_go <= 0:
@@ -107,7 +110,7 @@ class Remind(commands.Cog):
 
     async def send_reminder(self, user_id: int, message: str, channel_id: int):
         channel = await self.bot.fetch_channel(channel_id)
-        if channel:
+        if isinstance(channel, Messageable):
             await channel.send(
                 f"## 🔔 Reminder\n<@{user_id}>: `{message}`",
                 allowed_mentions=AllowedMentions(users=True),

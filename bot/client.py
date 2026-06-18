@@ -1,16 +1,22 @@
 import asyncio
 import datetime
-import os
 import traceback
-from typing import Optional
+from typing import TypedDict
 
 from aiofiles import os as aio_os
 from aiofiles.os import listdir
-from asyncpg import Pool
-from discord import AllowedMentions, Intents, Activity, ActivityType
+from discord import Activity, ActivityType, AllowedMentions, Intents
 from discord.ext import commands
+from psycopg_pool import AsyncConnectionPool
 
 from bot.lib import create_pool
+
+
+class CommandInfo(TypedDict):
+    name: str
+    aliases: list[str]
+    description: str
+    usage: str
 
 
 class Bot(commands.Bot):
@@ -27,15 +33,17 @@ class Bot(commands.Bot):
                 roles=False,
                 replied_user=False,
             ),
-            activity=Activity(type=ActivityType.listening, name="Spotify")
+            activity=Activity(type=ActivityType.listening, name="Spotify"),
         )
         self.boot: datetime.datetime = datetime.datetime.now(datetime.UTC)
-        self.pool: Optional[Pool] = None
-        self.command_groups: dict[str, list[commands.Command]] = {}
-        self.run()
+        self.pool: AsyncConnectionPool | None = None
+        self.command_groups: dict[str, list[CommandInfo]] = {}
 
-    def run(self) -> None:
-        super().run(token=os.getenv("DISCORD_TOKEN"), reconnect=True)
+    @property
+    def db(self) -> AsyncConnectionPool:
+        if self.pool is None:
+            raise RuntimeError("Database pool is not ready")
+        return self.pool
 
     async def setup_hook(self) -> None:
         self.pool = await create_pool()
@@ -70,7 +78,7 @@ class Bot(commands.Bot):
             return
 
         category_files = await listdir(f"bot/cogs/{category}")
-        category_commands = []
+        category_commands: list[CommandInfo] = []
 
         for file in category_files:
             if file.endswith(".py") and not file.startswith("_"):
@@ -82,18 +90,20 @@ class Bot(commands.Bot):
                     for command in commands:
                         if not command.hidden:
                             category_commands.append(
-                                {
-                                    "name": command.name,
-                                    "aliases": getattr(command, "aliases", []),
-                                    "description": getattr(command, "description", ""),
-                                    "usage": getattr(command, "usage", ""),
-                                }
+                                CommandInfo(
+                                    name=command.name,
+                                    aliases=list(getattr(command, "aliases", [])),
+                                    description=str(
+                                        getattr(command, "description", "")
+                                    ),
+                                    usage=str(getattr(command, "usage", "")),
+                                )
                             )
 
         self.command_groups[category] = category_commands
 
     async def on_command_error(
-            self, ctx: commands.Context, exception: commands.CommandError
+        self, ctx: commands.Context, exception: commands.CommandError
     ) -> None:
         ignored_errors = (
             commands.CommandNotFound,

@@ -21,7 +21,7 @@ class Password(commands.Cog):
 
         try:
             await ctx.author.send(f"🔑 ||{password}||")
-        except (HTTPException, Forbidden):
+        except HTTPException, Forbidden:
             await ctx.reply("Open your DMs and try again.")
         finally:
             await ctx.message.add_reaction("📨")

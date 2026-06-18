@@ -6,7 +6,7 @@
 [![Ruff](https://img.shields.io/badge/Ruff-lint%2Fformat-D7FF64?logo=ruff&logoColor=black)](https://docs.astral.sh/ruff)
 [![ty](https://img.shields.io/badge/ty-typecheck-DE5FE9)](https://docs.astral.sh/ty)
 
-My Discord bot for random things I want, built with discord.py.
+My Discord bot for random things I want, built with `discord.py`.
 
 ## Commands
 
@@ -14,7 +14,6 @@ My Discord bot for random things I want, built with discord.py.
 |---------|---------|-------------|
 | `;help` | — | Show all commands and uptime |
 | `;user [user]` | `ui` `userinfo` `whois` | Display user information |
-| `;google <query>` | — | Search the web via Google |
 | `;ip <ip\|domain>` | `ipv4` | IP geolocation lookup |
 | `;password [length]` | `pass` `pw` | Generate a secure password (sent via DM) |
 | `;remind <time> <message>` | `remindme` | Set a reminder — e.g. `2h`, `30m`, `5d` |
@@ -44,7 +43,7 @@ On first run, the bot applies [`bot/schema.sql`](bot/schema.sql) to your databas
 | Variable | Description | Where to get it |
 |----------|-------------|-----------------|
 | `DISCORD_TOKEN` | Bot token | [Discord Developer Portal → Applications → Bot](https://discord.com/developers/applications) |
-| `DATABASE_DSN` | PostgreSQL connection string | Your Postgres provider (e.g. [Neon](https://neon.tech)) |
+| `DATABASE_URL` | Neon Postgres connection string | [Neon Console → Connect](https://console.neon.tech) ([setup guide](https://neon.com/docs/guides/python)) |
 | `SCREENSHOT_API_TOKEN` | Screenshot API token | [screenshotapi.net → Dashboard](https://app.screenshotapi.net) |
 
 ## Scripts

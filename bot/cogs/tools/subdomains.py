@@ -1,4 +1,3 @@
-import asyncio
 import re
 
 import aiohttp
@@ -26,19 +25,19 @@ class Subdomains(commands.Cog):
         timeout = aiohttp.ClientTimeout(total=10)
 
         try:
-            async with aiohttp.ClientSession(timeout=timeout) as session:
-                async with session.get(
-                        f"https://crt.sh/?q=%25.{domain}&output=json"
-                ) as response:
-                    if response.status == 400:
-                        await ctx.reply("Invalid URL.")
-                        return
-                    elif response.status == 403:
-                        await ctx.reply("API rate limit exceeded.")
-                        return
+            async with (
+                aiohttp.ClientSession(timeout=timeout) as session,
+                session.get(f"https://crt.sh/?q=%25.{domain}&output=json") as response,
+            ):
+                if response.status == 400:
+                    await ctx.reply("Invalid URL.")
+                    return
+                elif response.status == 403:
+                    await ctx.reply("API rate limit exceeded.")
+                    return
 
-                    data = await response.json()
-        except asyncio.TimeoutError:
+                data = await response.json()
+        except TimeoutError:
             await ctx.reply("Request timed out.")
             return
         except aiohttp.ClientError:
@@ -49,7 +48,7 @@ class Subdomains(commands.Cog):
                 item["common_name"]
                 for item in data
                 if not item["common_name"].startswith("*.")
-                   and item["common_name"].endswith(domain)
+                and item["common_name"].endswith(domain)
             }
         )
 
@@ -64,10 +63,14 @@ class Subdomains(commands.Cog):
             visible_subdomains = subdomains
             more_line = ""
 
-        embed = Embed(title=f"{domain} subdomains", color=0x2A2D30).set_author(
-            name=ctx.author.display_name,
-            icon_url=ctx.author.display_avatar.url,
-        ).set_footer(text=f"{len(subdomains)} subdomain(s) found")
+        embed = (
+            Embed(title=f"{domain} subdomains", color=0x2A2D30)
+            .set_author(
+                name=ctx.author.display_name,
+                icon_url=ctx.author.display_avatar.url,
+            )
+            .set_footer(text=f"{len(subdomains)} subdomain(s) found")
+        )
         embed.description = "- " + "\n- ".join(visible_subdomains) + more_line
 
         await ctx.reply(embed=embed)

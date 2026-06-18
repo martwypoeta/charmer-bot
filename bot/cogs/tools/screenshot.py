@@ -1,42 +1,45 @@
+import os
 import re
+import ssl
 import time
 import urllib.parse
 import urllib.request
-import ssl
-import os
 from io import BytesIO
 
-from discord import ButtonStyle, Embed, File, Interaction, User
+from discord import ButtonStyle, Embed, File, Interaction, Member, User
 from discord.ext import commands
 from discord.ui import Button, View, button
+from psycopg.rows import dict_row
 
 from bot.client import Bot
 
 
 class Screenshot(commands.Cog):
+    _ADMIN_REQUIRED = "You need the Administrator permission to use this command."
+
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
         self.api_token = os.getenv("SCREENSHOT_API_TOKEN")
-        ssl._create_default_https_context = ssl._create_unverified_context
 
     @staticmethod
     def _is_administrator(ctx: commands.Context) -> bool:
         return (
             ctx.guild is not None
+            and isinstance(ctx.author, Member)
             and ctx.author.guild_permissions.administrator
         )
 
     @commands.group(aliases=["ss", "webshot"], invoke_without_command=True)
     async def screenshot(self, ctx: commands.Context, *, url: str) -> None:
-        async with self.bot.pool.acquire() as connection:
-            grants = await connection.fetch(
-                "SELECT * FROM ss_grants WHERE user_id = $1",
-                ctx.author.id,
+        async with self.bot.db.connection() as connection:
+            cur = await connection.execute(
+                "SELECT 1 FROM ss_grants WHERE user_id = %s",
+                (ctx.author.id,),
             )
-
-            if not self._is_administrator(ctx) and not grants:
+            if not self._is_administrator(ctx) and not await cur.fetchone():
                 await ctx.reply(
-                    "You are not permitted to use this command. Ask an admin to grant you permissions."
+                    "You are not permitted to use this command. "
+                    "Ask an admin to grant you permissions."
                 )
                 return
 
@@ -76,7 +79,9 @@ class Screenshot(commands.Cog):
                 )
 
                 class Delete(View):
-                    def __init__(self, *, author: User, timeout: int = 180) -> None:
+                    def __init__(
+                        self, *, author: User | Member, timeout: int = 180
+                    ) -> None:
                         super().__init__(timeout=timeout)
                         self.author = author
 
@@ -87,12 +92,13 @@ class Screenshot(commands.Cog):
 
                     @button(label="delete message", style=ButtonStyle.red)
                     async def delete(
-                            self, interaction: Interaction, button: Button
+                        self, interaction: Interaction, button: Button
                     ) -> None:
                         if not self.check(interaction):
                             return await interaction.response.defer()
 
-                        await interaction.message.delete()
+                        if interaction.message is not None:
+                            await interaction.message.delete()
 
                 await ctx.reply(file=file, embed=embed, view=Delete(author=ctx.author))
             else:
@@ -104,10 +110,14 @@ class Screenshot(commands.Cog):
     async def capture_screenshot(self, url: str) -> BytesIO:
         try:
             encoded_url = urllib.parse.quote_plus(url)
-            query = 'https://shot.screenshotapi.net/screenshot'
-            query += f'?token={self.api_token}&url={encoded_url}&output=image&file_type=png'
+            query = "https://shot.screenshotapi.net/screenshot"
+            query += (
+                f"?token={self.api_token}&url={encoded_url}&output=image&file_type=png"
+            )
 
-            with urllib.request.urlopen(query) as response:
+            with urllib.request.urlopen(
+                query, context=ssl._create_unverified_context()
+            ) as response:
                 screenshot_data = BytesIO(response.read())
                 screenshot_data.seek(0)
                 return screenshot_data
@@ -118,14 +128,15 @@ class Screenshot(commands.Cog):
     @screenshot.command(name="list", aliases=["ls"])
     async def _list(self, ctx: commands.Context) -> None:
         if not self._is_administrator(ctx):
-            await ctx.reply("You need the Administrator permission to use this command.")
+            await ctx.reply(self._ADMIN_REQUIRED)
             return
 
-        async with self.bot.pool.acquire() as connection:
-
-            grants = await connection.fetch(
-                "SELECT * FROM ss_grants"
-            )
+        async with (
+            self.bot.db.connection() as connection,
+            connection.cursor(row_factory=dict_row) as cur,
+        ):
+            await cur.execute("SELECT * FROM ss_grants")
+            grants = await cur.fetchall()
 
             if not grants:
                 await ctx.reply("No permissions granted.")
@@ -135,7 +146,14 @@ class Screenshot(commands.Cog):
                 Embed(
                     title="Users with screenshot permissions",
                     description=(
-                        f"{', '.join(f'<@{user["user_id"]}>' for user in grants[:20])} *(and {len(grants) - 20} more)*"
+                        (
+                            f"{
+                                ', '.join(
+                                    f'<@{user["user_id"]}>' for user in grants[:20]
+                                )
+                            } "
+                            f"*(and {len(grants) - 20} more)*"
+                        )
                         if len(grants) > 20
                         else ", ".join(f"<@{user['user_id']}>" for user in grants)
                     ),
@@ -152,23 +170,21 @@ class Screenshot(commands.Cog):
     @screenshot.command(name="grant")
     async def grant(self, ctx: commands.Context, user: User) -> None:
         if not self._is_administrator(ctx):
-            await ctx.reply("You need the Administrator permission to use this command.")
+            await ctx.reply(self._ADMIN_REQUIRED)
             return
 
-        async with self.bot.pool.acquire() as connection:
-            granted = await connection.fetch(
-                "SELECT * FROM ss_grants WHERE user_id = $1",
-                user.id,
+        async with self.bot.db.connection() as connection:
+            cur = await connection.execute(
+                "SELECT 1 FROM ss_grants WHERE user_id = %s",
+                (user.id,),
             )
-
-            if granted:
+            if await cur.fetchone():
                 await ctx.reply(f"{user.mention} already has permissions.")
                 return
 
             await connection.execute(
-                "INSERT INTO ss_grants VALUES ($1, $2)",
-                user.id,
-                ctx.author.id,
+                "INSERT INTO ss_grants VALUES (%s, %s)",
+                (user.id, ctx.author.id),
             )
 
             await ctx.reply(f"Granted {user.mention} permissions.")
@@ -176,22 +192,21 @@ class Screenshot(commands.Cog):
     @screenshot.command(name="revoke")
     async def revoke(self, ctx: commands.Context, user: User) -> None:
         if not self._is_administrator(ctx):
-            await ctx.reply("You need the Administrator permission to use this command.")
+            await ctx.reply(self._ADMIN_REQUIRED)
             return
 
-        async with self.bot.pool.acquire() as connection:
-            revoked = await connection.fetch(
-                "SELECT * FROM ss_grants WHERE user_id = $1",
-                user.id,
+        async with self.bot.db.connection() as connection:
+            cur = await connection.execute(
+                "SELECT 1 FROM ss_grants WHERE user_id = %s",
+                (user.id,),
             )
-
-            if not revoked:
+            if not await cur.fetchone():
                 await ctx.reply(f"{user.mention} does not have permissions.")
                 return
 
             await connection.execute(
-                "DELETE FROM ss_grants WHERE user_id = $1",
-                user.id,
+                "DELETE FROM ss_grants WHERE user_id = %s",
+                (user.id,),
             )
 
             await ctx.reply(f"Revoked {user.mention} permissions.")

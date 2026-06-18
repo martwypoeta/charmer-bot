@@ -5,7 +5,6 @@ from bot.lib import add_cogs
 async def setup(bot: Bot):
     cogs = (
         "bot.cogs.tools.screenshot",
-        "bot.cogs.tools.google",
         "bot.cogs.tools.password",
         "bot.cogs.tools.remind",
         "bot.cogs.tools.ip",

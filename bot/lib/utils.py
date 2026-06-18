@@ -1,9 +1,7 @@
-from typing import Tuple
-
 from discord.ext import commands
 
 
-async def add_cogs(bot: commands.Bot, cogs: Tuple[str, ...]) -> None:
+async def add_cogs(bot: commands.Bot, cogs: tuple[str, ...]) -> None:
     for cog_path in cogs:
         try:
             module = __import__(cog_path, fromlist=[""])
