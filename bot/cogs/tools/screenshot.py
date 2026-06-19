@@ -5,13 +5,91 @@ import time
 import urllib.parse
 import urllib.request
 from io import BytesIO
+from typing import Any, cast
 
-from discord import ButtonStyle, Embed, File, Interaction, Member, User
+from discord import (
+    ButtonStyle,
+    Embed,
+    File,
+    Interaction,
+    MediaGalleryItem,
+    Member,
+    Message,
+    User,
+)
 from discord.ext import commands
-from discord.ui import Button, View, button
+from discord.ui import (
+    ActionRow,
+    Button,
+    Container,
+    LayoutView,
+    MediaGallery,
+    Section,
+    Separator,
+    Thumbnail,
+)
 from psycopg.rows import dict_row
 
 from bot.client import Bot
+
+
+class ScreenshotLayout(LayoutView):
+    def __init__(
+        self,
+        url: str,
+        author: User | Member,
+        command_message: Message,
+        *,
+        elapsed: float,
+        size_kb: float,
+        timeout: float = 180,
+    ) -> None:
+        super().__init__(timeout=timeout)
+
+        header = (
+            f"## [Screenshot]({url})\n"
+            f"-# Requested by {author.display_name}"
+        )
+        stats = (
+            f"**Time** — {elapsed:.2f} seconds\n"
+            f"**Size** — {size_kb:.2f} kb"
+        )
+
+        delete_btn = Button(label="Delete Message", style=ButtonStyle.danger)
+        author_id = author.id
+
+        async def on_delete(interaction: Interaction) -> None:
+            if interaction.user.id != author_id:
+                return await interaction.response.defer()
+            await interaction.response.defer()
+            if interaction.message is not None:
+                await interaction.message.delete()
+            await command_message.add_reaction("😼")
+
+        delete_btn.callback = cast(Any, on_delete)
+
+        container = Container(
+            Section(
+                f"{header}\n\n{stats}",
+                accessory=Thumbnail(
+                    author.display_avatar.url,
+                    description=author.display_name,
+                ),
+            ),
+            Separator(visible=True),
+            MediaGallery(
+                MediaGalleryItem(
+                    "attachment://screenshot.png",
+                    description=url,
+                ),
+            ),
+            ActionRow(
+                Button(label="Visit Site", url=url, style=ButtonStyle.link),
+                delete_btn,
+            ),
+            accent_color=0x2A2D30,
+        )
+        self.add_item(container)
 
 
 class Screenshot(commands.Cog):
@@ -63,44 +141,18 @@ class Screenshot(commands.Cog):
 
             if screenshot_data:
                 file = File(screenshot_data, filename="screenshot.png")
+                size_kb = screenshot_data.getbuffer().nbytes / 1024
 
-                embed = (
-                    Embed(description=f"Screenshot of {url}", color=0x2A2D30)
-                    .add_field(name="Time taken", value=f"{elapsed:.2f} seconds")
-                    .add_field(
-                        name="Bytes",
-                        value=f"{screenshot_data.getbuffer().nbytes / 1024:.2f} kb",
-                    )
-                    .set_image(url="attachment://screenshot.png")
-                    .set_author(
-                        name=ctx.author.display_name,
-                        icon_url=ctx.author.display_avatar.url,
-                    )
+                await ctx.reply(
+                    file=file,
+                    view=ScreenshotLayout(
+                        url,
+                        ctx.author,
+                        ctx.message,
+                        elapsed=elapsed,
+                        size_kb=size_kb,
+                    ),
                 )
-
-                class Delete(View):
-                    def __init__(
-                        self, *, author: User | Member, timeout: int = 180
-                    ) -> None:
-                        super().__init__(timeout=timeout)
-                        self.author = author
-
-                        self.add_item(Button(label="visit site", url=url))
-
-                    def check(self, interaction: Interaction) -> bool:
-                        return interaction.user.id == self.author.id
-
-                    @button(label="delete message", style=ButtonStyle.red)
-                    async def delete(
-                        self, interaction: Interaction, button: Button
-                    ) -> None:
-                        if not self.check(interaction):
-                            return await interaction.response.defer()
-
-                        if interaction.message is not None:
-                            await interaction.message.delete()
-
-                await ctx.reply(file=file, embed=embed, view=Delete(author=ctx.author))
             else:
                 await ctx.reply("Failed to capture screenshot. Please try again later.")
 
