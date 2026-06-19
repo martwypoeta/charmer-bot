@@ -2,10 +2,67 @@ import re
 from urllib.parse import quote
 
 import aiohttp
-from discord import Embed
+from discord import Member, User
 from discord.ext import commands
+from discord.ui import (
+    ActionRow,
+    Container,
+    LayoutView,
+    Section,
+    Separator,
+    TextDisplay,
+    Thumbnail,
+)
 
-from bot.lib import Pagination
+from bot.lib import paginate
+
+
+class SubdomainsLayout(LayoutView):
+    def __init__(
+        self,
+        domain: str,
+        author: User | Member,
+        page_items: list[str],
+        page: int,
+        pages: int,
+        total: int,
+        *,
+        nav: ActionRow | None = None,
+    ) -> None:
+        super().__init__(timeout=None)
+
+        search_url = f"https://hackertarget.com/hostsearch/?q={quote(domain)}"
+        header = (
+            f"## [{domain} subdomains]({search_url})\n"
+            f"-# Requested by {author.display_name}"
+        )
+        summary = f"**{total}** subdomain(s) found"
+
+        if page_items:
+            list_text = "\n".join(
+                f"- [{sub}](https://{sub})" for sub in page_items
+            )
+        else:
+            list_text = "_No subdomains found._"
+
+        children: list = [
+            Section(
+                f"{header}\n\n{summary}",
+                accessory=Thumbnail(
+                    author.display_avatar.url,
+                    description=author.display_name,
+                ),
+            ),
+            Separator(visible=True),
+            TextDisplay(list_text),
+        ]
+        if pages > 1:
+            children.append(TextDisplay(f"-# Page {page}/{pages}"))
+        if nav is not None:
+            children.append(nav)
+
+        container = Container(*children, accent_color=0x2A2D30)
+        self.add_item(container)
 
 
 class Subdomains(commands.Cog):
@@ -65,19 +122,17 @@ class Subdomains(commands.Cog):
 
         subdomains.sort(key=len, reverse=True)
 
-        def build_embed(page_items: list[str], page: int, pages: int) -> Embed:
-            footer = f"{len(subdomains)} subdomain(s) found"
-            if pages > 1:
-                footer += f" · Page {page}/{pages}"
-            embed = (
-                Embed(title=f"{domain} subdomains", color=0x2A2D30)
-                .set_author(
-                    name=ctx.author.display_name,
-                    icon_url=ctx.author.display_avatar.url,
-                )
-                .set_footer(text=footer)
+        def build_layout(
+            page_items: list[str], page: int, pages: int, nav: ActionRow | None
+        ) -> LayoutView:
+            return SubdomainsLayout(
+                domain,
+                ctx.author,
+                page_items,
+                page,
+                pages,
+                len(subdomains),
+                nav=nav,
             )
-            embed.description = "- " + "\n- ".join(page_items)
-            return embed
 
-        await Pagination.send(ctx, subdomains, build_embed, per_page=15)
+        await paginate(ctx, subdomains, build_layout, per_page=15)

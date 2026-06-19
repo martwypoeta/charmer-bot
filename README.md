@@ -28,7 +28,7 @@ My Discord bot for random things I want, built with `discord.py`.
 **Requirements:**
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Python 3.14 (installed automatically by uv via [`.python-version`](.python-version))
+- Python 3.14 (installed automatically by `uv`)
 
 ```bash
 cp .env.example .env   # fill in your values

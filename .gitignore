@@ -10,5 +10,5 @@ pip-delete-this-directory.txt
 .DS_Store
 Thumbs.db
 ehthumbs.db
-venv/
+.ruff_cache/
 .venv/

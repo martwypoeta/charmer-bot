@@ -1,84 +1,97 @@
 from collections.abc import Callable
+from itertools import batched
 from typing import Any, cast
 
-from discord import ButtonStyle, Embed, Interaction, Message
+from discord import ButtonStyle, Interaction, Message
 from discord.ext import commands
-from discord.ui import Button, View
+from discord.ui import ActionRow, Button, LayoutView
+
+type PageBuilder[T] = Callable[[list[T], int, int, ActionRow | None], LayoutView]
 
 
 def _chunk[T](items: list[T], size: int) -> list[list[T]]:
-    return [items[i : i + size] for i in range(0, len(items), size)]
+    return [list(batch) for batch in batched(items, size, strict=False)]
 
 
-class _PaginatorView(View):
+class _PaginatorView(LayoutView):
     def __init__(
         self,
-        embeds: list[Embed],
+        chunks: list[list],
+        build_page: PageBuilder,
         author_id: int,
         *,
         timeout: float = 30,
     ) -> None:
         super().__init__(timeout=timeout)
-        self.embeds = embeds
-        self.author_id = author_id
-        self.page = 0
+        self._chunks = chunks
+        self._build_page = build_page
+        self._author_id = author_id
+        self._page = 0
+        self._page_count = len(chunks)
         self.message: Message | None = None
+        self._render()
 
-        self.prev = Button(label="◀", style=ButtonStyle.secondary)
-        self.next = Button(label="▶", style=ButtonStyle.secondary)
-        self.prev.callback = cast(Any, self._prev)
-        self.next.callback = cast(Any, self._next)
-        self.add_item(self.prev)
-        self.add_item(self.next)
-        self._update_buttons()
+    def _nav_row(self, *, disabled: bool = False) -> ActionRow:
+        prev = Button(
+            label="◀",
+            style=ButtonStyle.secondary,
+            disabled=disabled or self._page == 0,
+        )
+        nxt = Button(
+            label="▶",
+            style=ButtonStyle.secondary,
+            disabled=disabled or self._page >= self._page_count - 1,
+        )
+        prev.callback = cast(Any, self._prev_page)
+        nxt.callback = cast(Any, self._next_page)
+        return ActionRow(prev, nxt)
 
-    async def interaction_check(self, interaction: Interaction) -> bool:
-        if interaction.user.id != self.author_id:
+    def _render(self, *, disabled: bool = False) -> None:
+        self.clear_items()
+        layout = self._build_page(
+            self._chunks[self._page],
+            self._page + 1,
+            self._page_count,
+            self._nav_row(disabled=disabled),
+        )
+        for item in layout.children:
+            self.add_item(item)
+
+    async def _turn_page(self, interaction: Interaction, delta: int) -> None:
+        if interaction.user.id != self._author_id:
             await interaction.response.send_message(
                 "You can't interact with this pagination.", ephemeral=True
             )
-            return False
-        return True
+            return
+        self._page += delta
+        self._render()
+        await interaction.response.edit_message(view=self)
 
-    def _update_buttons(self) -> None:
-        self.prev.disabled = self.page == 0
-        self.next.disabled = self.page == len(self.embeds) - 1
+    async def _prev_page(self, interaction: Interaction) -> None:
+        await self._turn_page(interaction, -1)
 
-    async def _turn(self, interaction: Interaction, delta: int) -> None:
-        self.page += delta
-        self._update_buttons()
-        await interaction.response.edit_message(embed=self.embeds[self.page], view=self)
-
-    async def _prev(self, interaction: Interaction) -> None:
-        await self._turn(interaction, -1)
-
-    async def _next(self, interaction: Interaction) -> None:
-        await self._turn(interaction, 1)
+    async def _next_page(self, interaction: Interaction) -> None:
+        await self._turn_page(interaction, 1)
 
     async def on_timeout(self) -> None:
-        self.prev.disabled = True
-        self.next.disabled = True
+        self._render(disabled=True)
         if self.message:
             await self.message.edit(view=self)
 
 
-class Pagination:
-    @staticmethod
-    async def send[T](
-        ctx: commands.Context,
-        items: list[T],
-        embed_factory: Callable[[list[T], int, int], Embed],
-        *,
-        per_page: int = 15,
-        timeout: float = 30,
-    ) -> None:
-        chunks = _chunk(items, per_page)
-        pages = len(chunks)
-        embeds = [embed_factory(chunk, i + 1, pages) for i, chunk in enumerate(chunks)]
+async def paginate[T](
+    ctx: commands.Context,
+    items: list[T],
+    build_page: PageBuilder[T],
+    *,
+    per_page: int = 15,
+    timeout: float = 30,
+) -> None:
+    chunks = _chunk(items, per_page) if items else [[]]
 
-        if len(embeds) == 1:
-            await ctx.reply(embed=embeds[0])
-            return
+    if len(chunks) == 1:
+        await ctx.reply(view=build_page(chunks[0], 1, 1, None))
+        return
 
-        view = _PaginatorView(embeds, ctx.author.id, timeout=timeout)
-        view.message = await ctx.reply(embed=embeds[0], view=view)
+    view = _PaginatorView(chunks, build_page, ctx.author.id, timeout=timeout)
+    view.message = await ctx.reply(view=view)
