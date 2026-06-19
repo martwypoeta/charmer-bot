@@ -1,4 +1,5 @@
 import re
+from urllib.parse import quote
 
 import aiohttp
 from discord import Embed
@@ -27,7 +28,9 @@ class Subdomains(commands.Cog):
         try:
             async with (
                 aiohttp.ClientSession(timeout=timeout) as session,
-                session.get(f"https://crt.sh/?q=%25.{domain}&output=json") as response,
+                session.get(
+                    f"https://api.hackertarget.com/hostsearch/?q={quote(domain)}"
+                ) as response,
             ):
                 if response.status == 400:
                     await ctx.reply("Invalid URL.")
@@ -36,19 +39,25 @@ class Subdomains(commands.Cog):
                     await ctx.reply("API rate limit exceeded.")
                     return
 
-                data = await response.json()
+                text = await response.text()
         except TimeoutError:
             await ctx.reply("Request timed out.")
             return
         except aiohttp.ClientError:
             await ctx.reply("Request failed.")
+            return
+
+        if text.startswith("error "):
+            await ctx.reply("Invalid domain or search parameter.")
+            return
 
         subdomains = list(
             {
-                item["common_name"]
-                for item in data
-                if not item["common_name"].startswith("*.")
-                and item["common_name"].endswith(domain)
+                parts[0]
+                for line in text.splitlines()
+                if (parts := line.split(",", 1))
+                and len(parts) == 2
+                and parts[0].endswith(domain)
             }
         )
 

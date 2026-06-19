@@ -21,7 +21,7 @@ My Discord bot for random things I want, built with `discord.py`.
 | `;screenshot grant <user>` | — | Grant screenshot permission *(Administrator)* |
 | `;screenshot revoke <user>` | — | Revoke screenshot permission *(Administrator)* |
 | `;screenshot list` | `ls` | List users with screenshot permission *(Administrator)* |
-| `;subdomains <domain>` | `sub` `subdomain` | Find subdomains via crt.sh |
+| `;subdomains <domain>` | `sub` `subdomain` | Find subdomains via HackerTarget |
 
 ## Quick Setup
 
