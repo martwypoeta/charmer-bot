@@ -1,8 +1,75 @@
 import re
 
 import aiohttp
-from discord import Embed
+from discord import ButtonStyle, Member, SeparatorSpacing, User
 from discord.ext import commands
+from discord.ui import (
+    ActionRow,
+    Button,
+    Container,
+    LayoutView,
+    Section,
+    Separator,
+    TextDisplay,
+    Thumbnail,
+)
+
+
+class IpLookupLayout(LayoutView):
+    def __init__(
+        self,
+        data: dict,
+        author: User | Member,
+        *,
+        resolved_domain: str | None = None,
+    ) -> None:
+        super().__init__(timeout=None)
+
+        ip = data["query"]
+        country_code = data["countryCode"].lower()
+        flag = f":flag_{country_code}:"
+        maps_url = f"https://www.google.com/maps?q={data['lat']},{data['lon']}"
+        details_url = f"https://whatismyipaddress.com/ip/{ip}"
+
+        header = (
+            f"## [IP Lookup]({details_url})\n"
+            f"-# Requested by {author.display_name}"
+        )
+        if resolved_domain:
+            ip_line = f"Resolved `{resolved_domain}` → `{ip}`"
+        else:
+            ip_line = f"**`{ip}`**"
+
+        location = (
+            f"{flag} **{data['city']}, {data['regionName']}**\n"
+            f"{data['country']}"
+        )
+        network = (
+            f"**ISP** — {data['isp']}\n"
+            f"**ASN** — {data['as']}\n"
+            f"**Timezone** — {data['timezone']}\n"
+            f"**Coordinates** — `{data['lat']}, {data['lon']}`"
+        )
+
+        container = Container(
+            Section(
+                f"{header}\n\n{ip_line}",
+                accessory=Thumbnail(
+                    f"https://flagcdn.com/w320/{country_code}.png",
+                    description=data["country"],
+                ),
+            ),
+            Separator(visible=True),
+            TextDisplay(location),
+            Separator(visible=True, spacing=SeparatorSpacing.small),
+            TextDisplay(network),
+            ActionRow(
+                Button(label="IP Details", url=details_url, style=ButtonStyle.link),
+                Button(label="Google Maps", url=maps_url, style=ButtonStyle.link),
+            ),
+            accent_color=0x2A2D30,
+        )
+        self.add_item(container)
 
 
 class Ip(commands.Cog):
@@ -33,8 +100,10 @@ class Ip(commands.Cog):
         """
 
         regex = re.compile(pattern, re.VERBOSE)
+        resolved_domain: str | None = None
 
         if not regex.fullmatch(ip_or_domain):
+            resolved_domain = ip_or_domain
             try:
                 async with (
                     aiohttp.ClientSession() as session,
@@ -75,27 +144,10 @@ class Ip(commands.Cog):
 
             data = await response.json()
 
-        embed = (
-            Embed(
-                title="IP Lookup",
-                url=f"https://whatismyipaddress.com/ip/{data['query']}",
-                color=0x2A2D30,
+        await ctx.reply(
+            view=IpLookupLayout(
+                data,
+                ctx.author,
+                resolved_domain=resolved_domain,
             )
-            .set_author(
-                name=ctx.author.display_name,
-                icon_url=ctx.author.display_avatar.url,
-            )
-            .add_field(name="IP", value=data["query"], inline=False)
-            .add_field(
-                name="Country",
-                value=f":flag_{data['countryCode'].lower()}: {data['country']}",
-            )
-            .add_field(name="Region", value=data["regionName"])
-            .add_field(name="City", value=data["city"])
-            .add_field(name="ISP", value=data["isp"])
-            .add_field(name="Timezone", value=data["timezone"])
-            .add_field(name="ASN", value=data["as"])
-            .set_footer(text=f"Latitude: {data['lat']} • Longitude: {data['lon']}")
         )
-
-        await ctx.reply(embed=embed)
