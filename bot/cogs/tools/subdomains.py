@@ -5,6 +5,8 @@ import aiohttp
 from discord import Embed
 from discord.ext import commands
 
+from bot.lib import Pagination
+
 
 class Subdomains(commands.Cog):
     def __init__(self, bot):
@@ -63,23 +65,19 @@ class Subdomains(commands.Cog):
 
         subdomains.sort(key=len, reverse=True)
 
-        display_limit = 15
-        if len(subdomains) > display_limit:
-            visible_subdomains = subdomains[:display_limit]
-            more_count = len(subdomains) - display_limit
-            more_line = f"\n- +{more_count} more domains"
-        else:
-            visible_subdomains = subdomains
-            more_line = ""
-
-        embed = (
-            Embed(title=f"{domain} subdomains", color=0x2A2D30)
-            .set_author(
-                name=ctx.author.display_name,
-                icon_url=ctx.author.display_avatar.url,
+        def build_embed(page_items: list[str], page: int, pages: int) -> Embed:
+            footer = f"{len(subdomains)} subdomain(s) found"
+            if pages > 1:
+                footer += f" · Page {page}/{pages}"
+            embed = (
+                Embed(title=f"{domain} subdomains", color=0x2A2D30)
+                .set_author(
+                    name=ctx.author.display_name,
+                    icon_url=ctx.author.display_avatar.url,
+                )
+                .set_footer(text=footer)
             )
-            .set_footer(text=f"{len(subdomains)} subdomain(s) found")
-        )
-        embed.description = "- " + "\n- ".join(visible_subdomains) + more_line
+            embed.description = "- " + "\n- ".join(page_items)
+            return embed
 
-        await ctx.reply(embed=embed)
+        await Pagination.send(ctx, subdomains, build_embed, per_page=15)
