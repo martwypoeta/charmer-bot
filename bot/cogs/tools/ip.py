@@ -31,19 +31,13 @@ class IpLookupLayout(LayoutView):
         maps_url = f"https://www.google.com/maps?q={data['lat']},{data['lon']}"
         details_url = f"https://whatismyipaddress.com/ip/{ip}"
 
-        header = (
-            f"## [IP Lookup]({details_url})\n"
-            f"-# Requested by {author.display_name}"
-        )
+        header = f"## [IP Lookup]({details_url})\n-# Requested by {author.display_name}"
         if resolved_domain:
             ip_line = f"Resolved `{resolved_domain}` → `{ip}`"
         else:
             ip_line = f"**`{ip}`**"
 
-        location = (
-            f"{flag} **{data['city']}, {data['regionName']}**\n"
-            f"{data['country']}"
-        )
+        location = f"{flag} **{data['city']}, {data['regionName']}**\n{data['country']}"
         network = (
             f"**ISP** — {data['isp']}\n"
             f"**ASN** — {data['as']}\n"

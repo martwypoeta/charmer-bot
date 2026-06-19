@@ -46,14 +46,8 @@ class ScreenshotLayout(LayoutView):
     ) -> None:
         super().__init__(timeout=timeout)
 
-        header = (
-            f"## [Screenshot]({url})\n"
-            f"-# Requested by {author.display_name}"
-        )
-        stats = (
-            f"**Time** — {elapsed:.2f} seconds\n"
-            f"**Size** — {size_kb:.2f} kb"
-        )
+        header = f"## [Screenshot]({url})\n-# Requested by {author.display_name}"
+        stats = f"**Time** — {elapsed:.2f} seconds\n**Size** — {size_kb:.2f} kb"
 
         delete_btn = Button(label="Delete Message", style=ButtonStyle.danger)
         author_id = author.id

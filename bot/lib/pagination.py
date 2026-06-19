@@ -47,9 +47,7 @@ class _PaginatorView(View):
     async def _turn(self, interaction: Interaction, delta: int) -> None:
         self.page += delta
         self._update_buttons()
-        await interaction.response.edit_message(
-            embed=self.embeds[self.page], view=self
-        )
+        await interaction.response.edit_message(embed=self.embeds[self.page], view=self)
 
     async def _prev(self, interaction: Interaction) -> None:
         await self._turn(interaction, -1)
