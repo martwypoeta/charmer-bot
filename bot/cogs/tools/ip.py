@@ -14,6 +14,8 @@ from discord.ui import (
     Thumbnail,
 )
 
+from bot.client import Bot
+
 
 class IpLookupLayout(LayoutView):
     def __init__(
@@ -66,7 +68,7 @@ class IpLookupLayout(LayoutView):
 
 
 class Ip(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
 
     @commands.command(aliases=["ipv4"])

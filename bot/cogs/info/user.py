@@ -2,9 +2,11 @@ from discord import Embed, Member, NotFound
 from discord import User as DiscordUser
 from discord.ext import commands
 
+from bot.client import Bot
+
 
 class User(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
 
     @commands.command(aliases=["ui", "userinfo", "whois"])

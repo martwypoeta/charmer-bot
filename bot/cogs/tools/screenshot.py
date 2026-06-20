@@ -30,6 +30,8 @@ from discord.ui import (
 )
 from psycopg.rows import dict_row
 
+from bot.client import Bot
+
 
 class ScreenshotLayout(LayoutView):
     def __init__(
@@ -92,7 +94,7 @@ class ScreenshotLayout(LayoutView):
 class Screenshot(commands.Cog):
     _ADMIN_REQUIRED = "You need the Administrator permission to use this command."
 
-    def __init__(self, bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
         self.api_token = os.getenv("SCREENSHOT_API_TOKEN")
 

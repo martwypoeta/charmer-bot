@@ -6,9 +6,11 @@ from discord.abc import Messageable
 from discord.ext import commands, tasks
 from psycopg.rows import dict_row
 
+from bot.client import Bot
+
 
 class Remind(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
         self.check_reminders.start()
 

@@ -14,6 +14,7 @@ from discord.ui import (
     Thumbnail,
 )
 
+from bot.client import Bot
 from bot.lib import paginate
 
 
@@ -64,7 +65,7 @@ class SubdomainsLayout(LayoutView):
 
 
 class Subdomains(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
 
     @commands.command(aliases=["sub", "subdomain"])
