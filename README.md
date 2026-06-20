@@ -21,14 +21,14 @@ My Discord bot for random things I want, built with `discord.py`.
 | `;screenshot grant <user>` | — | Grant screenshot permission *(Administrator)* |
 | `;screenshot revoke <user>` | — | Revoke screenshot permission *(Administrator)* |
 | `;screenshot list` | `ls` | List users with screenshot permission *(Administrator)* |
-| `;subdomains <domain>` | `sub` `subdomain` | Find subdomains via crt.sh |
+| `;subdomains <domain>` | `sub` `subdomain` | Find subdomains via HackerTarget |
 
 ## Quick Setup
 
 **Requirements:**
 
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
-- Python 3.14 (installed automatically by uv via [`.python-version`](.python-version))
+- Python 3.14 (installed automatically by `uv`)
 
 ```bash
 cp .env.example .env   # fill in your values

@@ -25,8 +25,5 @@ line-length = 88
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 
-[tool.ty.environment]
-python-version = "3.14"
-
 [tool.ty.src]
 include = ["bot", "main.py"]

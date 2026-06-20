@@ -5,13 +5,90 @@ import time
 import urllib.parse
 import urllib.request
 from io import BytesIO
+from typing import Any, cast
 
-from discord import ButtonStyle, Embed, File, Interaction, Member, User
+from discord import (
+    ButtonStyle,
+    Embed,
+    File,
+    Interaction,
+    MediaGalleryItem,
+    Member,
+    Message,
+    User,
+)
 from discord.ext import commands
-from discord.ui import Button, View, button
+from discord.ui import (
+    ActionRow,
+    Button,
+    Container,
+    LayoutView,
+    MediaGallery,
+    Section,
+    Separator,
+    Thumbnail,
+)
 from psycopg.rows import dict_row
 
 from bot.client import Bot
+
+
+class ScreenshotLayout(LayoutView):
+    def __init__(
+        self,
+        url: str,
+        author: User | Member,
+        command_message: Message,
+        *,
+        elapsed: float,
+        size_kb: float,
+        timeout: float = 30,
+    ) -> None:
+        super().__init__(timeout=timeout)
+        self._author_id = author.id
+        self._command_message = command_message
+        self.message: Message | None = None
+
+        header = f"## [Screenshot]({url})\n-# Requested by {author.display_name}"
+        stats = f"**Time** — {elapsed:.2f} seconds\n**Size** — {size_kb:.2f} kb"
+
+        self._delete_btn = Button(label="Delete Message", style=ButtonStyle.danger)
+        self._delete_btn.callback = cast(Any, self._on_delete)
+
+        container = Container(
+            Section(
+                f"{header}\n\n{stats}",
+                accessory=Thumbnail(
+                    author.display_avatar.url,
+                    description=author.display_name,
+                ),
+            ),
+            Separator(visible=True),
+            MediaGallery(
+                MediaGalleryItem(
+                    "attachment://screenshot.png",
+                    description=url,
+                ),
+            ),
+            ActionRow(
+                Button(label="Visit Site", url=url, style=ButtonStyle.link),
+                self._delete_btn,
+            ),
+        )
+        self.add_item(container)
+
+    async def _on_delete(self, interaction: Interaction) -> None:
+        if interaction.user.id != self._author_id:
+            return await interaction.response.defer()
+        await interaction.response.defer()
+        if interaction.message is not None:
+            await interaction.message.delete()
+        await self._command_message.add_reaction("😼")
+
+    async def on_timeout(self) -> None:
+        self._delete_btn.disabled = True
+        if self.message:
+            await self.message.edit(view=self)
 
 
 class Screenshot(commands.Cog):
@@ -63,44 +140,16 @@ class Screenshot(commands.Cog):
 
             if screenshot_data:
                 file = File(screenshot_data, filename="screenshot.png")
+                size_kb = screenshot_data.getbuffer().nbytes / 1024
 
-                embed = (
-                    Embed(description=f"Screenshot of {url}", color=0x2A2D30)
-                    .add_field(name="Time taken", value=f"{elapsed:.2f} seconds")
-                    .add_field(
-                        name="Bytes",
-                        value=f"{screenshot_data.getbuffer().nbytes / 1024:.2f} kb",
-                    )
-                    .set_image(url="attachment://screenshot.png")
-                    .set_author(
-                        name=ctx.author.display_name,
-                        icon_url=ctx.author.display_avatar.url,
-                    )
+                view = ScreenshotLayout(
+                    url,
+                    ctx.author,
+                    ctx.message,
+                    elapsed=elapsed,
+                    size_kb=size_kb,
                 )
-
-                class Delete(View):
-                    def __init__(
-                        self, *, author: User | Member, timeout: int = 180
-                    ) -> None:
-                        super().__init__(timeout=timeout)
-                        self.author = author
-
-                        self.add_item(Button(label="visit site", url=url))
-
-                    def check(self, interaction: Interaction) -> bool:
-                        return interaction.user.id == self.author.id
-
-                    @button(label="delete message", style=ButtonStyle.red)
-                    async def delete(
-                        self, interaction: Interaction, button: Button
-                    ) -> None:
-                        if not self.check(interaction):
-                            return await interaction.response.defer()
-
-                        if interaction.message is not None:
-                            await interaction.message.delete()
-
-                await ctx.reply(file=file, embed=embed, view=Delete(author=ctx.author))
+                view.message = await ctx.reply(file=file, view=view)
             else:
                 await ctx.reply("Failed to capture screenshot. Please try again later.")
 
@@ -108,22 +157,16 @@ class Screenshot(commands.Cog):
             await ctx.reply(f"An error occurred: {e}")
 
     async def capture_screenshot(self, url: str) -> BytesIO:
-        try:
-            encoded_url = urllib.parse.quote_plus(url)
-            query = "https://shot.screenshotapi.net/screenshot"
-            query += (
-                f"?token={self.api_token}&url={encoded_url}&output=image&file_type=png"
-            )
+        encoded_url = urllib.parse.quote_plus(url)
+        query = "https://shot.screenshotapi.net/screenshot"
+        query += f"?token={self.api_token}&url={encoded_url}&output=image&file_type=png"
 
-            with urllib.request.urlopen(
-                query, context=ssl._create_unverified_context()
-            ) as response:
-                screenshot_data = BytesIO(response.read())
-                screenshot_data.seek(0)
-                return screenshot_data
-
-        except Exception as e:
-            raise e
+        with urllib.request.urlopen(
+            query, context=ssl._create_unverified_context()
+        ) as response:
+            screenshot_data = BytesIO(response.read())
+            screenshot_data.seek(0)
+            return screenshot_data
 
     @screenshot.command(name="list", aliases=["ls"])
     async def _list(self, ctx: commands.Context) -> None:
@@ -157,7 +200,6 @@ class Screenshot(commands.Cog):
                         if len(grants) > 20
                         else ", ".join(f"<@{user['user_id']}>" for user in grants)
                     ),
-                    color=0x2A2D30,
                 )
                 .set_author(
                     name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url

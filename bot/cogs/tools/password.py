@@ -4,9 +4,11 @@ import string
 from discord import Forbidden, HTTPException
 from discord.ext import commands
 
+from bot.client import Bot
+
 
 class Password(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
 
     @commands.command(aliases=["pass", "pw"])

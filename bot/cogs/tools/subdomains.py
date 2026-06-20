@@ -1,12 +1,71 @@
 import re
+from urllib.parse import quote
 
 import aiohttp
-from discord import Embed
+from discord import Member, User
 from discord.ext import commands
+from discord.ui import (
+    ActionRow,
+    Container,
+    LayoutView,
+    Section,
+    Separator,
+    TextDisplay,
+    Thumbnail,
+)
+
+from bot.client import Bot
+from bot.lib import paginate
+
+
+class SubdomainsLayout(LayoutView):
+    def __init__(
+        self,
+        domain: str,
+        author: User | Member,
+        page_items: list[str],
+        page: int,
+        pages: int,
+        total: int,
+        *,
+        nav: ActionRow | None = None,
+    ) -> None:
+        super().__init__(timeout=None)
+
+        search_url = f"https://hackertarget.com/hostsearch/?q={quote(domain)}"
+        header = (
+            f"## [{domain} subdomains]({search_url})\n"
+            f"-# Requested by {author.display_name}"
+        )
+        summary = f"**{total}** subdomain(s) found"
+
+        if page_items:
+            list_text = "\n".join(f"- [{sub}](https://{sub})" for sub in page_items)
+        else:
+            list_text = "_No subdomains found._"
+
+        children: list = [
+            Section(
+                f"{header}\n\n{summary}",
+                accessory=Thumbnail(
+                    author.display_avatar.url,
+                    description=author.display_name,
+                ),
+            ),
+            Separator(visible=True),
+            TextDisplay(list_text),
+        ]
+        if pages > 1:
+            children.append(TextDisplay(f"-# Page {page}/{pages}"))
+        if nav is not None:
+            children.append(nav)
+
+        container = Container(*children)
+        self.add_item(container)
 
 
 class Subdomains(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: Bot) -> None:
         self.bot = bot
 
     @commands.command(aliases=["sub", "subdomain"])
@@ -27,50 +86,52 @@ class Subdomains(commands.Cog):
         try:
             async with (
                 aiohttp.ClientSession(timeout=timeout) as session,
-                session.get(f"https://crt.sh/?q=%25.{domain}&output=json") as response,
+                session.get(
+                    f"https://api.hackertarget.com/hostsearch/?q={quote(domain)}"
+                ) as response,
             ):
                 if response.status == 400:
                     await ctx.reply("Invalid URL.")
                     return
-                elif response.status == 403:
+                if response.status == 403:
                     await ctx.reply("API rate limit exceeded.")
                     return
 
-                data = await response.json()
+                text = await response.text()
         except TimeoutError:
             await ctx.reply("Request timed out.")
             return
         except aiohttp.ClientError:
             await ctx.reply("Request failed.")
+            return
+
+        if text.startswith("error "):
+            await ctx.reply("Invalid domain or search parameter.")
+            return
 
         subdomains = list(
             {
-                item["common_name"]
-                for item in data
-                if not item["common_name"].startswith("*.")
-                and item["common_name"].endswith(domain)
+                parts[0]
+                for line in text.splitlines()
+                if (parts := line.split(",", 1))
+                and len(parts) == 2
+                and parts[0].endswith(domain)
             }
         )
 
         subdomains.sort(key=len, reverse=True)
 
-        display_limit = 15
-        if len(subdomains) > display_limit:
-            visible_subdomains = subdomains[:display_limit]
-            more_count = len(subdomains) - display_limit
-            more_line = f"\n- +{more_count} more domains"
-        else:
-            visible_subdomains = subdomains
-            more_line = ""
-
-        embed = (
-            Embed(title=f"{domain} subdomains", color=0x2A2D30)
-            .set_author(
-                name=ctx.author.display_name,
-                icon_url=ctx.author.display_avatar.url,
+        def build_page(
+            page_items: list[str], page: int, pages: int, nav: ActionRow | None
+        ) -> LayoutView:
+            return SubdomainsLayout(
+                domain,
+                ctx.author,
+                page_items,
+                page,
+                pages,
+                len(subdomains),
+                nav=nav,
             )
-            .set_footer(text=f"{len(subdomains)} subdomain(s) found")
-        )
-        embed.description = "- " + "\n- ".join(visible_subdomains) + more_line
 
-        await ctx.reply(embed=embed)
+        await paginate(ctx, subdomains, build_page, per_page=15)

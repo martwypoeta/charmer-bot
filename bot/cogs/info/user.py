@@ -1,4 +1,4 @@
-from discord import Embed, Member
+from discord import Embed, Member, NotFound
 from discord import User as DiscordUser
 from discord.ext import commands
 
@@ -13,24 +13,28 @@ class User(commands.Cog):
     async def user(
         self, ctx: commands.Context, user: DiscordUser | Member | None = None
     ) -> None:
-        if user is None:
-            user = ctx.author
-
         if ctx.guild is None:
             await ctx.reply("This command can only be used in a server.")
             return
 
+        user = user or ctx.author
         _user = await self.bot.fetch_user(user.id)
 
+        try:
+            member = await ctx.guild.fetch_member(user.id)
+        except NotFound:
+            member = None
+
+        if member:
+            colour = member.colour
+        elif _user.accent_colour:
+            colour = _user.accent_colour
+        else:
+            colour = user.colour
+
         embed = (
-            Embed(
-                title="User Info",
-                color=0x2A2D30,
-            )
-            .set_author(
-                name=user.name,
-                icon_url=user.display_avatar.url,
-            )
+            Embed(title="User Info", color=colour)
+            .set_author(name=user.name, icon_url=user.display_avatar.url)
             .add_field(
                 name="Created at",
                 value=f"<t:{int(user.created_at.timestamp())}:R>",
@@ -39,11 +43,6 @@ class User(commands.Cog):
             .set_image(url=_user.banner.url if _user.banner else None)
             .set_footer(text=f"User ID: {user.id}")
         )
-
-        try:
-            member = await ctx.guild.fetch_member(user.id)
-        except Exception:
-            member = None
 
         if member and member.joined_at:
             embed.add_field(
@@ -56,35 +55,24 @@ class User(commands.Cog):
         )
 
         if member:
-            embed.add_field(
-                name="Roles",
-                value=" ".join(
-                    role.mention
-                    for role in sorted(member.roles, reverse=True)[:3]
-                    if role != ctx.guild.default_role
-                )
-                + (
-                    f" *(+{len(member.roles) - 3} more)*"
-                    if len(member.roles) > 3
-                    else ""
-                ),
-                inline=False,
+            roles = sorted(
+                (role for role in member.roles if role != ctx.guild.default_role),
+                reverse=True,
             )
+            shown = " ".join(role.mention for role in roles[:3])
+            if len(roles) > 3:
+                shown += f" *(+{len(roles) - 3} more)*"
+            embed.add_field(name="Roles", value=shown or "*none*", inline=False)
 
+        links = {
+            "Avatar": user.display_avatar.url,
+            "Banner": _user.banner.url if _user.banner else None,
+            "Profile": f"https://discord.com/users/{user.id}",
+        }
         embed.add_field(
             name="Links",
-            value=(
-                "\n".join(
-                    (
-                        f"- [{name} URL]({url})"
-                        for name, url in {
-                            "Avatar": user.display_avatar.url,
-                            "Banner": _user.banner.url if _user.banner else None,
-                            "Profile": f"https://discord.com/users/{user.id}",
-                        }.items()
-                        if url
-                    )
-                )
+            value="\n".join(
+                f"- [{name} URL]({url})" for name, url in links.items() if url
             ),
             inline=False,
         )
