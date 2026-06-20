@@ -39,9 +39,7 @@ class SubdomainsLayout(LayoutView):
         summary = f"**{total}** subdomain(s) found"
 
         if page_items:
-            list_text = "\n".join(
-                f"- [{sub}](https://{sub})" for sub in page_items
-            )
+            list_text = "\n".join(f"- [{sub}](https://{sub})" for sub in page_items)
         else:
             list_text = "_No subdomains found._"
 
@@ -61,7 +59,7 @@ class SubdomainsLayout(LayoutView):
         if nav is not None:
             children.append(nav)
 
-        container = Container(*children, accent_color=0x2A2D30)
+        container = Container(*children)
         self.add_item(container)
 
 
@@ -94,7 +92,7 @@ class Subdomains(commands.Cog):
                 if response.status == 400:
                     await ctx.reply("Invalid URL.")
                     return
-                elif response.status == 403:
+                if response.status == 403:
                     await ctx.reply("API rate limit exceeded.")
                     return
 
@@ -122,7 +120,7 @@ class Subdomains(commands.Cog):
 
         subdomains.sort(key=len, reverse=True)
 
-        def build_layout(
+        def build_page(
             page_items: list[str], page: int, pages: int, nav: ActionRow | None
         ) -> LayoutView:
             return SubdomainsLayout(
@@ -135,4 +133,4 @@ class Subdomains(commands.Cog):
                 nav=nav,
             )
 
-        await paginate(ctx, subdomains, build_layout, per_page=15)
+        await paginate(ctx, subdomains, build_page, per_page=15)

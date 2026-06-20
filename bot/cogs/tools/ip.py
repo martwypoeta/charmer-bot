@@ -61,7 +61,6 @@ class IpLookupLayout(LayoutView):
                 Button(label="IP Details", url=details_url, style=ButtonStyle.link),
                 Button(label="Google Maps", url=maps_url, style=ButtonStyle.link),
             ),
-            accent_color=0x2A2D30,
         )
         self.add_item(container)
 
@@ -72,6 +71,8 @@ class Ip(commands.Cog):
 
     @commands.command(aliases=["ipv4"])
     async def ip(self, ctx: commands.Context, *, ip_or_domain: str) -> None:
+        await ctx.typing()
+
         pattern = r"""
         (
             # IPv4 pattern
@@ -95,28 +96,27 @@ class Ip(commands.Cog):
 
         regex = re.compile(pattern, re.VERBOSE)
         resolved_domain: str | None = None
+        timeout = aiohttp.ClientTimeout(total=10)
 
         if not regex.fullmatch(ip_or_domain):
             resolved_domain = ip_or_domain
             try:
                 async with (
-                    aiohttp.ClientSession() as session,
+                    aiohttp.ClientSession(timeout=timeout) as session,
                     session.get(
                         f"https://dns.google/resolve?name={ip_or_domain}&type=A"
                     ) as resp,
                 ):
-                    if resp.status == 200:
-                        dns_data = await resp.json()
-                        if "Answer" in dns_data:
-                            ip_address = dns_data["Answer"][0]["data"]
-                        else:
-                            await ctx.reply(
-                                f"Could not resolve the domain: {ip_or_domain}"
-                            )
-                            return
-                    else:
+                    if resp.status != 200:
                         await ctx.reply(f"DNS resolution failed for: {ip_or_domain}")
                         return
+
+                    dns_data = await resp.json()
+                    if "Answer" not in dns_data:
+                        await ctx.reply(f"Could not resolve the domain: {ip_or_domain}")
+                        return
+
+                    ip_address = dns_data["Answer"][0]["data"]
             except aiohttp.ClientError:
                 await ctx.reply(
                     f"An error occurred while resolving the domain: {ip_or_domain}"
@@ -126,7 +126,7 @@ class Ip(commands.Cog):
             ip_address = ip_or_domain
 
         async with (
-            aiohttp.ClientSession() as session,
+            aiohttp.ClientSession(timeout=timeout) as session,
             session.get(
                 f"http://ip-api.com/json/{ip_address}",
                 headers={"Accept": "application/json"},

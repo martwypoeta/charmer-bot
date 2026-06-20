@@ -30,8 +30,6 @@ from discord.ui import (
 )
 from psycopg.rows import dict_row
 
-from bot.client import Bot
-
 
 class ScreenshotLayout(LayoutView):
     def __init__(
@@ -42,25 +40,18 @@ class ScreenshotLayout(LayoutView):
         *,
         elapsed: float,
         size_kb: float,
-        timeout: float = 180,
+        timeout: float = 30,
     ) -> None:
         super().__init__(timeout=timeout)
+        self._author_id = author.id
+        self._command_message = command_message
+        self.message: Message | None = None
 
         header = f"## [Screenshot]({url})\n-# Requested by {author.display_name}"
         stats = f"**Time** — {elapsed:.2f} seconds\n**Size** — {size_kb:.2f} kb"
 
-        delete_btn = Button(label="Delete Message", style=ButtonStyle.danger)
-        author_id = author.id
-
-        async def on_delete(interaction: Interaction) -> None:
-            if interaction.user.id != author_id:
-                return await interaction.response.defer()
-            await interaction.response.defer()
-            if interaction.message is not None:
-                await interaction.message.delete()
-            await command_message.add_reaction("😼")
-
-        delete_btn.callback = cast(Any, on_delete)
+        self._delete_btn = Button(label="Delete Message", style=ButtonStyle.danger)
+        self._delete_btn.callback = cast(Any, self._on_delete)
 
         container = Container(
             Section(
@@ -79,17 +70,29 @@ class ScreenshotLayout(LayoutView):
             ),
             ActionRow(
                 Button(label="Visit Site", url=url, style=ButtonStyle.link),
-                delete_btn,
+                self._delete_btn,
             ),
-            accent_color=0x2A2D30,
         )
         self.add_item(container)
+
+    async def _on_delete(self, interaction: Interaction) -> None:
+        if interaction.user.id != self._author_id:
+            return await interaction.response.defer()
+        await interaction.response.defer()
+        if interaction.message is not None:
+            await interaction.message.delete()
+        await self._command_message.add_reaction("😼")
+
+    async def on_timeout(self) -> None:
+        self._delete_btn.disabled = True
+        if self.message:
+            await self.message.edit(view=self)
 
 
 class Screenshot(commands.Cog):
     _ADMIN_REQUIRED = "You need the Administrator permission to use this command."
 
-    def __init__(self, bot: Bot) -> None:
+    def __init__(self, bot):
         self.bot = bot
         self.api_token = os.getenv("SCREENSHOT_API_TOKEN")
 
@@ -137,16 +140,14 @@ class Screenshot(commands.Cog):
                 file = File(screenshot_data, filename="screenshot.png")
                 size_kb = screenshot_data.getbuffer().nbytes / 1024
 
-                await ctx.reply(
-                    file=file,
-                    view=ScreenshotLayout(
-                        url,
-                        ctx.author,
-                        ctx.message,
-                        elapsed=elapsed,
-                        size_kb=size_kb,
-                    ),
+                view = ScreenshotLayout(
+                    url,
+                    ctx.author,
+                    ctx.message,
+                    elapsed=elapsed,
+                    size_kb=size_kb,
                 )
+                view.message = await ctx.reply(file=file, view=view)
             else:
                 await ctx.reply("Failed to capture screenshot. Please try again later.")
 
@@ -154,22 +155,16 @@ class Screenshot(commands.Cog):
             await ctx.reply(f"An error occurred: {e}")
 
     async def capture_screenshot(self, url: str) -> BytesIO:
-        try:
-            encoded_url = urllib.parse.quote_plus(url)
-            query = "https://shot.screenshotapi.net/screenshot"
-            query += (
-                f"?token={self.api_token}&url={encoded_url}&output=image&file_type=png"
-            )
+        encoded_url = urllib.parse.quote_plus(url)
+        query = "https://shot.screenshotapi.net/screenshot"
+        query += f"?token={self.api_token}&url={encoded_url}&output=image&file_type=png"
 
-            with urllib.request.urlopen(
-                query, context=ssl._create_unverified_context()
-            ) as response:
-                screenshot_data = BytesIO(response.read())
-                screenshot_data.seek(0)
-                return screenshot_data
-
-        except Exception as e:
-            raise e
+        with urllib.request.urlopen(
+            query, context=ssl._create_unverified_context()
+        ) as response:
+            screenshot_data = BytesIO(response.read())
+            screenshot_data.seek(0)
+            return screenshot_data
 
     @screenshot.command(name="list", aliases=["ls"])
     async def _list(self, ctx: commands.Context) -> None:
@@ -203,7 +198,6 @@ class Screenshot(commands.Cog):
                         if len(grants) > 20
                         else ", ".join(f"<@{user['user_id']}>" for user in grants)
                     ),
-                    color=0x2A2D30,
                 )
                 .set_author(
                     name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url

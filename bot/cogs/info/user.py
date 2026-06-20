@@ -2,11 +2,9 @@ from discord import Embed, Member, NotFound
 from discord import User as DiscordUser
 from discord.ext import commands
 
-from bot.client import Bot
-
 
 class User(commands.Cog):
-    def __init__(self, bot: Bot) -> None:
+    def __init__(self, bot):
         self.bot = bot
 
     @commands.command(aliases=["ui", "userinfo", "whois"])
@@ -25,8 +23,15 @@ class User(commands.Cog):
         except NotFound:
             member = None
 
+        if member:
+            colour = member.colour
+        elif _user.accent_colour:
+            colour = _user.accent_colour
+        else:
+            colour = user.colour
+
         embed = (
-            Embed(title="User Info", color=0x2A2D30)
+            Embed(title="User Info", color=colour)
             .set_author(name=user.name, icon_url=user.display_avatar.url)
             .add_field(
                 name="Created at",

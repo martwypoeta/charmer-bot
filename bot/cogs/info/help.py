@@ -1,11 +1,9 @@
 from discord import Embed
 from discord.ext import commands
 
-from bot.client import Bot
-
 
 class Help(commands.Cog):
-    def __init__(self, bot: Bot) -> None:
+    def __init__(self, bot):
         self.bot = bot
 
     @commands.command()
@@ -20,7 +18,6 @@ class Help(commands.Cog):
                 description="\n".join(
                     (f"Bot uptime: <t:{int(self.bot.boot.timestamp())}:R>",)
                 ),
-                color=0x2A2D30,
             )
             .set_author(
                 name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url
@@ -31,7 +28,7 @@ class Help(commands.Cog):
         for category, _commands in self.bot.command_groups.items():
             command_list = ", ".join(f"{command['name']}" for command in _commands)
             embed.add_field(
-                name=f"{category.title()}",
+                name=category.title(),
                 value=command_list if command_list else "No commands available",
                 inline=False,
             )
