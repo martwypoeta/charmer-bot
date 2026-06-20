@@ -36,13 +36,12 @@ class HelpLayout(LayoutView):
             children.append(Separator(visible=True))
             children.append(
                 TextDisplay(
-                    f"**{category.title()}** — {command_list or '_No commands available_'}"
+                    f"**{category.title()}** — "
+                    f"{command_list or '_No commands available_'}"
                 )
             )
 
-        children.append(
-            TextDisplay(f"-# {all_command_count} command(s) available")
-        )
+        children.append(TextDisplay(f"-# {all_command_count} command(s) available"))
 
         self.add_item(Container(*children))
 
@@ -53,6 +52,4 @@ class Help(commands.Cog):
 
     @commands.command()
     async def help(self, ctx: commands.Context) -> None:
-        await ctx.reply(
-            view=HelpLayout(self.bot, ctx.author, self.bot.command_groups)
-        )
+        await ctx.reply(view=HelpLayout(self.bot, ctx.author, self.bot.command_groups))
