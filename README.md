@@ -10,18 +10,32 @@ My Discord bot for random things I want, built with `discord.py`.
 
 ## Commands
 
+The default prefix is `;`. Arguments in `<angle brackets>` are required, `[square brackets]` are optional.
+
+### General
+
 | Command | Aliases | Description |
 |---------|---------|-------------|
-| `;help` | — | Show all commands and uptime |
-| `;user [user]` | `ui` `userinfo` `whois` | Display user information |
+| `;help` | | Show all commands and uptime |
+| `;user [user]` | `ui`, `userinfo`, `whois` | Display user information |
+
+### Utilities
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
 | `;ip <ip\|domain>` | `ipv4` | IP geolocation lookup |
-| `;password [length]` | `pass` `pw` | Generate a secure password (sent via DM) |
-| `;remind <time> <message>` | `remindme` | Set a reminder — e.g. `2h`, `30m`, `5d` |
-| `;screenshot <url>` | `ss` `webshot` | Take a website screenshot |
-| `;screenshot grant <user>` | — | Grant screenshot permission *(Administrator)* |
-| `;screenshot revoke <user>` | — | Revoke screenshot permission *(Administrator)* |
-| `;screenshot list` | `ls` | List users with screenshot permission *(Administrator)* |
-| `;subdomains <domain>` | `sub` `subdomain` | Find subdomains via HackerTarget |
+| `;password [length]` | `pass`, `pw` | Generate a secure password (sent via DM) |
+| `;remind <time> <message>` | `remindme` | Set a reminder. Time examples: `30m`, `2h`, `5d` |
+| `;subdomains <domain>` | `sub`, `subdomain` | Find subdomains via HackerTarget |
+
+### Screenshots
+
+| Command | Aliases | Description |
+|---------|---------|-------------|
+| `;screenshot <url>` | `ss`, `webshot` | Take a website screenshot |
+| `;screenshot grant <user>` | | Grant screenshot permission (Administrator only) |
+| `;screenshot revoke <user>` | | Revoke screenshot permission (Administrator only) |
+| `;screenshot list` | `ls` | List users with screenshot permission (Administrator only) |
 
 ## Quick Setup
 
